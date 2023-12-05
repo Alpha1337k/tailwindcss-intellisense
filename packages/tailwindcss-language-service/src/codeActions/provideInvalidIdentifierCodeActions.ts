@@ -15,10 +15,10 @@ export async function provideInvalidIdentifierCodeActions(
   diagnostic: InvalidIdentifierDiagnostic
 ): Promise<CodeAction[]> {
 	const actions: CodeAction[] = [{
-		title: `Ignore ${diagnostic.chunk} in workspace settings`,
+		title: `Ignore '${diagnostic.chunk}' in this workspace`,
 		kind: CodeActionKind.QuickFix,
 		diagnostics: [diagnostic],
-		command: Command.create(`Ignore '${diagnostic.chunk}' in workspace settings`, 'tailwindCSS.addWordToWorkspaceFileFromServer', diagnostic.chunk)
+		command: Command.create(`Ignore '${diagnostic.chunk}' in this workspace`, 'tailwindCSS.addWordToWorkspaceFileFromServer', diagnostic.chunk)
 	}];
 
 	if (typeof diagnostic.suggestion == 'string') {
