@@ -299,13 +299,13 @@
 			  "error"
 			],
 			"default": "warning",
-			"markdownDescription": "Validate CSS for wrongly typed classes.",
+			"markdownDescription": "Validate CSS for wrongly typed tailwind classes.",
 			"scope": "language-overridable"
 		  },
 		"tailwindCSS.lint.onlyAllowTailwindCSS": {
 			"type": "boolean",
 			"default": true,
-			"markdownDescription": "Validate CSS for non / invalid tailwindCSS classes. You are able to ignore on an case-by-case basis. Requires `invalidVariant` to be active.",
+			"markdownDescription": "Validate CSS for non / invalid tailwindCSS classes. You are able to ignore on an case-by-case basis. Requires `tailwindCSS.lint.validateClasses` to be active.",
 			"scope": "language-overridable"
 		},
         "tailwindCSS.experimental.classRegex": {
