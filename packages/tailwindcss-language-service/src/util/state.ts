@@ -101,6 +101,7 @@ export interface State {
   variants?: Variant[]
   corePlugins?: string[]
   blocklist?: unknown[]
+  ignoredKeys?: string[]
   modules?: {
     tailwindcss?: { version: string; module: any }
     postcss?: { version: string; module: Postcss }

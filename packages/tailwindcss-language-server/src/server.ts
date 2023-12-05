@@ -2211,6 +2211,10 @@ class TW {
     method: '@/tailwindCSS/getProject',
     params: { uri: string }
   ): { version: string } | null
+  private onRequest(
+    method: '@/tailwindCSS/setIgnoredCSS',
+    params: { ignoredKeys: string[] }
+  ): { version: string } | null
   private onRequest(method: string, params: any): any {
     if (method === '@/tailwindCSS/sortSelection') {
       let project = this.getProject({ uri: params.uri })
@@ -2233,6 +2237,13 @@ class TW {
         version: project.state.version,
       }
     }
+
+    if (method === '@/tailwindCSS/setIgnoredCSS') {
+		this.projects.forEach((p) => {
+			p.state.ignoredKeys = params.ignoredKeys
+		})
+		this.refreshDiagnostics()
+	  }
   }
 
   private updateCapabilities() {

@@ -4,14 +4,19 @@ import { findClassListsInDocument, getClassNamesInClassList } from '../util/find
 import type { TextDocument } from 'vscode-languageserver-textdocument'
 import { Range } from 'vscode-languageserver'
 
-function createDiagnostic(className: DocumentClassName, range: Range, message: string, suggestion?: string): InvalidIdentifierDiagnostic
+function createDiagnostic(className: DocumentClassName, range: Range, chunk: string, message: string, suggestion?: string): InvalidIdentifierDiagnostic
 {
 	return({
 		code: DiagnosticKind.InvalidIdentifier,
-		severity: 3,
+		severity: 1,
 		range: range,
 		message,
 		className,
+		chunk,
+		source: "TailwindCSS",
+		data: {
+			name: className.className
+		},
 		suggestion,
 		otherClassNames: null
 	})
@@ -96,6 +101,11 @@ function editDistance(s1: string, s2: string) {
 	return costs[s2.length];
 }
 
+/**
+ * 
+ * 
+ */
+
 function handleClass(state: State, 
 	className: DocumentClassName,
 	chunk: string,
@@ -114,12 +124,12 @@ function handleClass(state: State,
 
 	if (noNumericClasses[chunk])
 	{
-		return createDiagnostic(className, range, `${chunk} requires an postfix. Choose between ${noNumericClasses[chunk].join(', -')}.`)
+		return createDiagnostic(className, range, chunk, `${chunk} requires an postfix. Choose between ${noNumericClasses[chunk].join(', -')}.`)
 	}
 
 	if (classes[nonNumericValue])
 	{
-		return createDiagnostic(className, range, `${nonNumericValue} requires no postfix.`, nonNumericValue)
+		return createDiagnostic(className, range, chunk, `${nonNumericValue} requires no postfix.`, nonNumericValue)
 	}
 
 	if (nonNumericValue && noNumericClasses[nonNumericValue])
@@ -142,11 +152,11 @@ function handleClass(state: State,
 
 		if (closestSuggestion.text)
 		{
-			return createDiagnostic(className, range, `${chunk} is an invalid value. Did you mean ${nonNumericValue + '-' + closestSuggestion.text}? (${closestSuggestion.value})`, nonNumericValue + '-' + closestSuggestion.text)
+			return createDiagnostic(className, range, chunk, `${chunk} is an invalid value. Did you mean ${nonNumericValue + '-' + closestSuggestion.text}?`, nonNumericValue + '-' + closestSuggestion.text)
 		}
 		else
 		{
-			return createDiagnostic(className, range, `${chunk} is an invalid value. Choose between ${noNumericClasses[nonNumericValue].join(', ')}.`)
+			return createDiagnostic(className, range, chunk, `${chunk} is an invalid value. Choose between ${noNumericClasses[nonNumericValue].join(', ')}.`)
 		}
 	}
 
@@ -168,11 +178,11 @@ function handleClass(state: State,
 
 	if (closestSuggestion.text)
 	{
-		return createDiagnostic(className, range, `${chunk} was not found in the registry. Did you mean ${closestSuggestion.text} (${closestSuggestion.value})?`, closestSuggestion.text)
+		return createDiagnostic(className, range, chunk, `${chunk} was not found in the registry. Did you mean ${closestSuggestion.text}?`, closestSuggestion.text)
 	}
 	else
 	{
-		return createDiagnostic(className, range, `${chunk} was not found in the registry.`)
+		return createDiagnostic(className, range, chunk, `${chunk} was not found in the registry.`)
 	}
 }
 
@@ -202,22 +212,26 @@ function handleVariant(state: State, className: DocumentClassName, chunk: string
 
 	if (closestSuggestion.text)
 	{
-		return createDiagnostic(className, range,  `${chunk} is an invalid variant. Did you mean ${closestSuggestion.text} (${closestSuggestion.value})?`, closestSuggestion.text)
+		return createDiagnostic(className, range, chunk, `${chunk} is an invalid variant. Did you mean ${closestSuggestion.text}?`, closestSuggestion.text)
 	}
 	else
 	{
-		return createDiagnostic(className, range, `${chunk} is an invalid variant.`);
+		return createDiagnostic(className, range, chunk, `${chunk} is an invalid variant.`);
 	}
 
 }
 
-export async function getUnknownClassesDiagnostics(
+export async function getInvalidValueDiagnostics(
 	state: State,
 	document: TextDocument,
 	settings: Settings
 ): Promise<InvalidIdentifierDiagnostic[]> {
 	let severity = settings.tailwindCSS.lint.invalidClass
 	if (severity === 'ignore') return [];
+
+	if (state.ignoredKeys) {
+		debugger
+	}
 	
 	const items = [];
 	const { classes, variants, noNumericClasses} = generateHashMaps(state);
@@ -239,15 +253,16 @@ export async function getUnknownClassesDiagnostics(
 					character: className.range.start.character + offset + chunk.length,
 				}}
 
-				if (index == splitted.length - 1)
-				{
-					items.push(handleClass(state, className, chunk, classes, noNumericClasses, range));
+				if (!state.ignoredKeys || state.ignoredKeys.find(x => x == chunk) == undefined) {
+					if (index == splitted.length - 1)
+					{
+						items.push(handleClass(state, className, chunk, classes, noNumericClasses, range));
+					}
+					else 
+					{
+						items.push(handleVariant(state, className, chunk, variants, range));
+					}
 				}
-				else 
-				{
-					items.push(handleVariant(state, className, chunk, variants, range));
-				}
-
 				offset += chunk.length + 1;
 			})
 		});
