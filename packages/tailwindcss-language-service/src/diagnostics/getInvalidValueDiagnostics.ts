@@ -2,22 +2,43 @@ import { State, Settings, DocumentClassName, Variant } from '../util/state'
 import { CssConflictDiagnostic, DiagnosticKind, InvalidIdentifierDiagnostic } from './types'
 import { findClassListsInDocument, getClassNamesInClassList } from '../util/find'
 import type { TextDocument } from 'vscode-languageserver-textdocument'
-import { Range } from 'vscode-languageserver'
+import { DiagnosticSeverity, Range } from 'vscode-languageserver'
 
-function createDiagnostic(className: DocumentClassName, range: Range, chunk: string, message: string, suggestion?: string): InvalidIdentifierDiagnostic
+function createDiagnostic(data: {
+		className: DocumentClassName,
+		range: Range,
+		chunk: string,
+		message: string,
+		suggestion?: string
+		severity: 'info' | 'warning' | 'error' | 'ignore'
+	}): InvalidIdentifierDiagnostic
 {
+	let severity: DiagnosticSeverity = 1;
+
+	switch (data.severity) {
+		case "info":
+			severity = 3;
+			break
+		case "warning":
+			severity = 2;
+			break
+		case "error":
+			severity = 1;
+			break
+	}
+
 	return({
 		code: DiagnosticKind.InvalidIdentifier,
-		severity: 1,
-		range: range,
-		message,
-		className,
-		chunk,
+		severity,
+		range: data.range,
+		message: data.message,
+		className: data.className,
+		chunk: data.chunk,
 		source: "TailwindCSS",
 		data: {
-			name: className.className
+			name: data.className.className
 		},
-		suggestion,
+		suggestion: data.suggestion,
 		otherClassNames: null
 	})
 }
@@ -101,46 +122,64 @@ function editDistance(s1: string, s2: string) {
 	return costs[s2.length];
 }
 
-/**
- * 
- * 
- */
+function getMinimumSimilarity(str: string) {
+	if (str.length < 5) {
+		return 0.5
+	} else {
+		return 0.7
+	}
+}
 
-function handleClass(state: State, 
+
+function handleClass(data: {state: State, 
+	settings: Settings,
 	className: DocumentClassName,
 	chunk: string,
 	classes: {[key: string]: State['classList'][0] },
 	noNumericClasses: {[key: string]: string[]},
 	range: Range
-	)
+	})
 {
-	if (chunk.indexOf('[') != -1 || classes[chunk] != undefined) {
+	if (data.chunk.indexOf('[') != -1 || data.classes[data.chunk] != undefined) {
 		return null;
 	}
 
-	let nonNumericChunk = chunk.split('-');
+	let nonNumericChunk = data.chunk.split('-');
 	let nonNumericRemainder = nonNumericChunk.pop();
 	const nonNumericValue = nonNumericChunk.join('-');
 
-	if (noNumericClasses[chunk])
+	if (data.noNumericClasses[data.chunk])
 	{
-		return createDiagnostic(className, range, chunk, `${chunk} requires an postfix. Choose between ${noNumericClasses[chunk].join(', -')}.`)
+		return createDiagnostic({
+			className: data.className,
+			range: data.range,
+			chunk: data.chunk,
+			message: `${data.chunk} requires an postfix. Choose between ${data.noNumericClasses[data.chunk].join(', -')}.`,
+			severity: data.settings.tailwindCSS.lint.validateClasses,
+		})
 	}
 
-	if (classes[nonNumericValue])
+	if (data.classes[nonNumericValue])
 	{
-		return createDiagnostic(className, range, chunk, `${nonNumericValue} requires no postfix.`, nonNumericValue)
+		return createDiagnostic({
+			className: data.className, 
+			range: data.range, 
+			chunk: data.chunk, 
+			message: `${nonNumericValue} requires no postfix.`,
+			suggestion: nonNumericValue,
+			severity: data.settings.tailwindCSS.lint.validateClasses,
+		})
 	}
 
-	if (nonNumericValue && noNumericClasses[nonNumericValue])
+	if (nonNumericValue && data.noNumericClasses[nonNumericValue])
 	{
 		let closestSuggestion = {
 			value: 0,
 			text: ""
 		};
 
-		for (let i = 0; i < noNumericClasses[nonNumericValue].length; i++) {
-			const e = noNumericClasses[nonNumericValue][i];
+		for (let i = 0; i < data.noNumericClasses[nonNumericValue].length; i++) {
+			const e = data.noNumericClasses[nonNumericValue][i];
 			const match = similarity(e, nonNumericRemainder);
 			if (match > 0.5 && match > closestSuggestion.value) {
 				closestSuggestion = {
@@ -152,11 +191,24 @@ function handleClass(state: State,
 
 		if (closestSuggestion.text)
 		{
-			return createDiagnostic(className, range, chunk, `${chunk} is an invalid value. Did you mean ${nonNumericValue + '-' + closestSuggestion.text}?`, nonNumericValue + '-' + closestSuggestion.text)
+			return createDiagnostic({
+				className: data.className, 
+				range: data.range, 
+				chunk: data.chunk, 
+				message: `${data.chunk} is an invalid value. Did you mean ${nonNumericValue + '-' + closestSuggestion.text}?`,
+				suggestion: nonNumericValue + '-' + closestSuggestion.text,
+				severity: data.settings.tailwindCSS.lint.validateClasses,
+			})
 		}
 		else
 		{
-			return createDiagnostic(className, range, chunk, `${chunk} is an invalid value. Choose between ${noNumericClasses[nonNumericValue].join(', ')}.`)
+			return createDiagnostic({
+				className: data.className, 
+				range: data.range, 
+				chunk: data.chunk, 
+				message: `${data.chunk} is an invalid value. Choose between ${data.noNumericClasses[nonNumericValue].join(', ')}.`,
+				severity: data.settings.tailwindCSS.lint.validateClasses,
+			})
 		}
 	}
 
@@ -165,10 +217,12 @@ function handleClass(state: State,
 		value: 0,
 		text: ""
 	};
-	for (let i = 0; i < state.classList.length; i++) {
-		const e = state.classList[i];
-		const match = similarity(e[0], className.className);
-		if (match > 0.5 && match > closestSuggestion.value) {
+
+	let minimumSimilarity = getMinimumSimilarity(data.className.className)
+	for (let i = 0; i < data.state.classList.length; i++) {
+		const e = data.state.classList[i];
+		const match = similarity(e[0], data.className.className);
+		if (match >= minimumSimilarity && match > closestSuggestion.value) {
 			closestSuggestion = {
 				value: match,
 				text: e[0]
@@ -178,17 +232,38 @@ function handleClass(state: State,
 
 	if (closestSuggestion.text)
 	{
-		return createDiagnostic(className, range, chunk, `${chunk} was not found in the registry. Did you mean ${closestSuggestion.text}?`, closestSuggestion.text)
+		return createDiagnostic({
+			className: data.className, 
+			range: data.range, 
+			chunk: data.chunk, 
+			message: `${data.chunk} was not found in the registry. Did you mean ${closestSuggestion.text}?`, 
+			severity: data.settings.tailwindCSS.lint.validateClasses,
+			suggestion: closestSuggestion.text
+		})
 	}
-	else
+	else if (data.settings.tailwindCSS.lint.onlyAllowTailwindCSS)
 	{
-		return createDiagnostic(className, range, chunk, `${chunk} was not found in the registry.`)
+		return createDiagnostic({
+			className: data.className, 
+			range: data.range, 
+			chunk: data.chunk, 
+			message: `${data.chunk} was not found in the registry.`,
+			severity: data.settings.tailwindCSS.lint.validateClasses
+		})
 	}
+	return null
 }
 
-function handleVariant(state: State, className: DocumentClassName, chunk: string, variants: {[key: string]: Variant }, range: Range)
+function handleVariant(data: {
+	state: State, 
+	settings: Settings,
+	className: DocumentClassName, 
+	chunk: string, 
+	variants: {[key: string]: Variant }, 
+	range: Range
+	})
 {
-	if (chunk.indexOf('[') != -1 || variants[chunk]) {		
+	if (data.chunk.indexOf('[') != -1 || data.variants[data.chunk]) {		
 		return null;
 	}
 
@@ -197,11 +272,12 @@ function handleVariant(state: State, className: DocumentClassName, chunk: string
 		value: 0,
 		text: ""
 	};
+	let minimumSimilarity = getMinimumSimilarity(data.className.className)
 
-	Object.keys(variants).forEach(key => {
-		const variant = variants[key];
-		const match = similarity(variant.name, chunk);
-		if (match >= 0.5 && match > closestSuggestion.value) {
+	Object.keys(data.variants).forEach(key => {
+		const variant = data.variants[key];
+		const match = similarity(variant.name, data.chunk);
+		if (match >= minimumSimilarity && match > closestSuggestion.value) {
 			closestSuggestion = {
 				value: match,
 				text: variant.name
@@ -212,11 +288,24 @@ function handleVariant(state: State, className: DocumentClassName, chunk: string
 
 	if (closestSuggestion.text)
 	{
-		return createDiagnostic(className, range, chunk, `${chunk} is an invalid variant. Did you mean ${closestSuggestion.text}?`, closestSuggestion.text)
+		return createDiagnostic({
+			className: data.className, 
+			range: data.range, 
+			chunk: data.chunk, 
+			message: `${data.chunk} is an invalid variant. Did you mean ${closestSuggestion.text}?`, 
+			suggestion: closestSuggestion.text,
+			severity: data.settings.tailwindCSS.lint.validateClasses
+		})
 	}
 	else
 	{
-		return createDiagnostic(className, range, chunk, `${chunk} is an invalid variant.`);
+		return createDiagnostic({
+			className: data.className, 
+			range: data.range, 
+			chunk: data.chunk, 
+			message: `${data.chunk} is an invalid variant.`,
+			severity: data.settings.tailwindCSS.lint.validateClasses
+		});
 	}
 
 }
@@ -226,12 +315,8 @@ export async function getInvalidValueDiagnostics(
 	document: TextDocument,
 	settings: Settings
 ): Promise<InvalidIdentifierDiagnostic[]> {
-	let severity = settings.tailwindCSS.lint.invalidClass
+	let severity = settings.tailwindCSS.lint.validateClasses
 	if (severity === 'ignore') return [];
-
-	if (state.ignoredKeys) {
-		debugger
-	}
 	
 	const items = [];
 	const { classes, variants, noNumericClasses} = generateHashMaps(state);
@@ -253,14 +338,14 @@ export async function getInvalidValueDiagnostics(
 					character: className.range.start.character + offset + chunk.length,
 				}}
 
-				if (!state.ignoredKeys || state.ignoredKeys.find(x => x == chunk) == undefined) {
+				if (!settings.tailwindCSS.ignoredCSS.find(x => x == chunk)) {
 					if (index == splitted.length - 1)
 					{
-						items.push(handleClass(state, className, chunk, classes, noNumericClasses, range));
+						items.push(handleClass({state, settings, className, chunk, classes, noNumericClasses, range}));
 					}
 					else 
 					{
-						items.push(handleVariant(state, className, chunk, variants, range));
+						items.push(handleVariant({state, settings, className, chunk, variants, range}));
 					}
 				}
 				offset += chunk.length + 1;

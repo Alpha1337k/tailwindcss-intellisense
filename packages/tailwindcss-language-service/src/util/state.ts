@@ -51,12 +51,15 @@ export type TailwindCssSettings = {
   showPixelEquivalents: boolean
   rootFontSize: number
   colorDecorators: boolean
+  ignoredCSS: string[]
   lint: {
     invalidClass: DiagnosticSeveritySetting
     cssConflict: DiagnosticSeveritySetting
     invalidApply: DiagnosticSeveritySetting
     invalidScreen: DiagnosticSeveritySetting
-    invalidVariant: DiagnosticSeveritySetting
+    invalidVariant: DiagnosticSeveritySetting,
+	validateClasses: DiagnosticSeveritySetting,
+	onlyAllowTailwindCSS: boolean,
     invalidConfigPath: DiagnosticSeveritySetting
     invalidTailwindDirective: DiagnosticSeveritySetting
     recommendedVariantOrder: DiagnosticSeveritySetting
@@ -101,7 +104,6 @@ export interface State {
   variants?: Variant[]
   corePlugins?: string[]
   blocklist?: unknown[]
-  ignoredKeys?: string[]
   modules?: {
     tailwindcss?: { version: string; module: any }
     postcss?: { version: string; module: Postcss }

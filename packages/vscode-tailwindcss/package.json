@@ -290,6 +290,24 @@
           "markdownDescription": "Class variants not in the recommended order (applies in [JIT mode](https://tailwindcss.com/docs/just-in-time-mode) only)",
           "scope": "language-overridable"
         },
+        "tailwindCSS.lint.validateClasses": {
+			"type": "string",
+			"enum": [
+			  "ignore",
+			  "info",
+			  "warning",
+			  "error"
+			],
+			"default": "warning",
+			"markdownDescription": "Validate CSS for wrongly typed classes.",
+			"scope": "language-overridable"
+		  },
+		"tailwindCSS.lint.onlyAllowTailwindCSS": {
+			"type": "boolean",
+			"default": true,
+			"markdownDescription": "Validate CSS for non / invalid tailwindCSS classes. You are able to ignore on an case-by-case basis. Requires `invalidVariant` to be active.",
+			"scope": "language-overridable"
+		},
         "tailwindCSS.experimental.classRegex": {
           "type": "array",
           "scope": "language-overridable"
